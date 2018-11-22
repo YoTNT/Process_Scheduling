@@ -67,29 +67,21 @@ linkedList :: linkedList()
 
 void linkedList :: insert2Open(qNode *newNode)
 {
-	qNode* curStep = this->head;
-	qNode* nextStep = curStep->next;
-	
-	while(nextStep != NULL)
+	qNode* ptr = this->head;
+
+	while(ptr->next != NULL)
 	{
-		// The newNode order is in between
-		if(newNode->num_of_dpts < curStep->num_of_dpts &&
-			newNode->num_of_dpts > nextStep->num_of_dpts)
+		if(newNode->num_of_dpts > ptr->next->num_of_dpts)
 		{
-			newNode->next = nextStep;
-			curStep->next = newNode;
+			newNode->next = ptr->next;
+			ptr->next = newNode;
 			return;
 		}
 		else
-		{
-			curStep->next = nextStep;
-			nextStep = curStep->next;
-		}
+			ptr = ptr->next;	// next step
 	}
-
-	// The queue is either empty or it reaches to the end of queue
-	newNode->next = nextStep;
-	curStep->next = newNode;
+	newNode->next = ptr->next;
+	ptr->next = newNode;
 	return;
 }
 
@@ -115,7 +107,7 @@ void linkedList :: printList()
 		cout << ptr->jobId << " -> ";
 		ptr = ptr->next;
 	}
-	cout << "NULL";
+	cout << "NULL" << endl;
 	return;
 }
 
@@ -146,14 +138,28 @@ class Scheduling
 											// and update job time array
 		int getUnMarkOrphen();				// Find the next orphen, just 1 orphen
 		void printList();					// Printing the OPEN on console
-		void printTable(string);			// Printing the schedule table to file
+		string printTable(int);				// Printing the schedule table to file
 		int findProcessor();				// Finding the next available processor, return -1 if there's no one
 		void updateTable(int, int, int);	// Updating talbe with parameters (Proc id, job id, time slice)
 		int checkCycle();					// Checking if the graph has cycle, 1 == yes, 0 == no
-		int findDoneJob(int);				// Finding if a job is done by processr i, return job id if there is
+		int findDoneJob();					// Finding if a job is done by processr i, return job id if there is
 		void deleteNode(int);				// Deleting the done job(id = i) node
 		void deleteEdge(int);				// Deleting the edges pointed out from done job(id = i) node
+		bool allDone();						// Return true if all jobs are done
 };
+
+void print_append(string content, string input_file_name)
+{
+	ofstream outFile(input_file_name, fstream::app);
+	outFile << content;
+	outFile.close();
+}
+
+void file_cleaner(string file_name)
+{
+	ofstream outFile(file_name, fstream::trunc);
+	outFile.close();
+}
 
 Scheduling :: Scheduling()
 {
@@ -219,14 +225,6 @@ void Scheduling :: loadMatrix(string input_file_name)
 		this->adjacencyMatrix[r][c] = 1;
 	}
 
-	// Testing code
-	for(int i = 1; i <= numOfJobs; i++)
-	{
-		for(int j = 1; j <= numOfJobs; j++)
-			cout << std::to_string(this->adjacencyMatrix[i][j]) << " ";
-		cout << endl;
-	}
-
 	// Finding parentCount and kidCount
 	int parent_id;
 	int kid_id;
@@ -242,13 +240,6 @@ void Scheduling :: loadMatrix(string input_file_name)
 			if(this->adjacencyMatrix[i][kid_id] == 1)
 				this->parentCount[kid_id]++;
 	}
-
-	// Testing code
-	for(int i = 1; i <= numOfJobs; i++)
-		cout << i << " has " << this->kidCount[i] << " kids." << endl;
-
-	for(int i = 1; i <= numOfJobs; i++)
-		cout << i << " has " << this->parentCount[i] << " parents." << endl;
 
 	inFile.close();
 	return;
@@ -284,10 +275,6 @@ void Scheduling :: computeTotalJobTimes(string input_file_name)
 	for(int i = 0; i <= numOfJobs; i++)
 		this->scheduleTable[i] = new int[total + 1];
 
-	// Testing code
-	for(int i = 1; i <= numOfJobs; i++)
-		cout << i << " __ job time: " << this->jobTimeAry[i] << endl;
-
 	inFile.close();
 	return;
 }
@@ -317,7 +304,7 @@ void Scheduling :: updateTable(int availProc, int newJob, int currentTime)
 {
 	int j_time = this->jobTimeAry[newJob];
 	int end = currentTime + j_time;
-	for(int i = currentTime; i <= end; i)
+	for(int i = currentTime; i <= end; i++)
 		this->scheduleTable[availProc][i] = newJob;
 
 	return;
@@ -329,20 +316,104 @@ int Scheduling :: checkCycle()
 	bool Graph_is_not_empty = false;
 	bool Proc_all_finished = true;
 
-	if(this->OPEN->next == NULL)
+	if(this->OPEN->head->next == NULL)
 		OPEN_is_empty = true;
 	
 	for(int i = 1; i <= this->numNodes; i++)
-		if(this->jobMarked[i] == 0)
+		if(this->jobDone[i] == 0)
 			Graph_is_not_empty = true;
 
 	for(int i = 1; i <= this->procGiven; i++)
 		if(this->processJob[i] != 0)
 			Proc_all_finished = false;
 
-	
+	if(OPEN_is_empty && Graph_is_not_empty && Proc_all_finished)
+		return 1;
+	else
+		return 0;
 }
 
+bool Scheduling :: allDone()
+{
+	bool done = true;
+
+	for(int i = 1; i <= this->numNodes; i++)
+		if(this->jobDone[i] != 1)
+			done = false;
+
+	return done;
+}
+
+// Return 0 if there's no job is done
+int Scheduling :: findDoneJob()
+{
+	int done_job = 0;
+
+	for(int i = 1; i <= this->procGiven; i++)
+		if(this->processTime[i] == 0 && this->processJob[i] != 0)
+		{
+			done_job = this->processJob[i];
+			this->processJob[i] = 0;
+			return done_job;
+		}
+	
+	return done_job;
+}
+
+void Scheduling :: deleteNode(int j_id)
+{
+	this->jobDone[j_id] = 1;
+	
+	return;
+}
+
+void Scheduling :: deleteEdge(int j_id)
+{
+	for(int i = 1; i <= this->numNodes; i++)
+		if(this->adjacencyMatrix[j_id][i] != 0)
+			this->parentCount[i]--;
+	
+	return;
+}
+
+string Scheduling :: printTable(int timeLine)
+{
+	string line[this->procGiven + 1];
+	line[0] = "      ";
+	for(int i = 1; i <= this->procGiven; i++)
+		line[i] = "P(" + std::to_string(i) + ") |";
+
+	for(int i = 0; i < timeLine; i++)
+		line[0] += "--" + std::to_string(i) + "--\t";
+
+	for(int i = 1; i <= this->procGiven; i++)
+		for(int j = 0; j < timeLine; j++)
+		{
+			if(this->scheduleTable[i][j] == 0)
+				line[i] += "  -  |\t";
+			else if(this->scheduleTable[i][j] < 10)
+				line[i] += "  " + std::to_string(this->scheduleTable[i][j]) + "  |\t";
+			else
+				line[i] += "  " + std::to_string(this->scheduleTable[i][j]) + " |\t";
+		}
+
+	string seperator = "      ";
+	for(int i = 0; i < timeLine; i++)
+		seperator += "--------";
+	seperator += "\r\n";
+
+	string result = "";
+	for(int i = 0; i <= this->procGiven; i++)
+	{
+		result += line[i];
+		result += "\r\n";
+		if(i >= 1)
+			result += seperator;
+	}
+	result += "\r\n\r\n";
+
+	return result;
+}
 
 
 
@@ -351,7 +422,117 @@ int main(int argc, char ** argv)
 	Scheduling* s = new Scheduling();
 	s->loadMatrix(argv[1]);
 	s->computeTotalJobTimes(argv[2]);
-	s->OPEN->printList();
+	file_cleaner(argv[3]);
+	file_cleaner(argv[4]);
+
+	cout << "Please input the number of processors: ";
+	cin >> s->procGiven;
+	if(s->procGiven <= 0)
+	{
+		cout << "Illigal input!" << endl;
+		exit(0);
+	}
+	else if(s->procGiven > s->numNodes)
+		s->procGiven = s->numNodes;
+	// Allocating processJob and processTime
+	s->processJob = new int[s->procGiven + 1];
+	s->processTime = new int[s->procGiven + 1];
+	for(int i = 0; i <= s->procGiven; i++)
+	{
+		s->processJob[i] = 0;
+		s->processTime[i] = 0;
+	}
+
+	int procUsed = 0;
+	int currentTime = 0;
+	int availProc = -1;
+
+	while(!s->allDone())
+	{
+		int orphen_id = s->getUnMarkOrphen();
+		while(orphen_id != -1)
+		{
+			int orphen_job_time = s->jobTimeAry[orphen_id];
+			int orphen_kid_num = s->kidCount[orphen_id];
+
+			qNode* temp_qNode = new qNode(orphen_id, orphen_kid_num);
+			s->OPEN->insert2Open(temp_qNode);
+		
+			orphen_id = s->getUnMarkOrphen();
+		}
+
+		s->OPEN->printList();
+
+		qNode* pop_Open_qNode = new qNode();
+		pop_Open_qNode = s->OPEN->removal();
+
+		while(pop_Open_qNode != NULL and procUsed < s->procGiven)
+		{
+			availProc = s->findProcessor();
+			if(availProc > 0)
+			{
+				procUsed++;
+				int newJob_id = pop_Open_qNode->jobId;
+				int newJob_time = s->jobTimeAry[newJob_id];
+				s->processJob[availProc] = newJob_id;
+				s->processTime[availProc] = newJob_time;
+				s->updateTable(availProc, newJob_id, currentTime);
+			}
+			if(procUsed < s->procGiven)
+				pop_Open_qNode = s->OPEN->removal();
+		}
+
+		int cyc = s->checkCycle();
+		if(cyc == 1)	// Cycle exist
+		{
+			cout << "There is cycle in the graph" << endl;
+			exit(0);
+		}
+
+		// printTable();
+		print_append(s->printTable(currentTime), argv[3]);
+
+		currentTime++;
+
+		// Decreasing processTime by 1
+		for(int i = 1; i <= s->procGiven; i++)
+			if(s->processTime[i] > 0)
+				s->processTime[i]--;
+		
+		int done_job_id = s->findDoneJob();
+		while(done_job_id != 0)
+		{
+			s->deleteNode(done_job_id);
+			s->deleteEdge(done_job_id);
+			procUsed--;
+
+			done_job_id = s->findDoneJob();
+		}
+	
+		// Debugging
+		string word2 = "";
+		word2 += std::to_string(currentTime);
+		word2 += "\r\n";
+		for(int i = 1; i <= s->numNodes; i++)
+			word2 += std::to_string(s->jobMarked[i]) + " ";
+		word2 += "\r\n";
+		for(int i = 1; i <= s->procGiven; i++)
+			word2 += std::to_string(s->processTime[i]) + " ";
+		word2 += "\r\n";
+		for(int i = 1; i <= s->procGiven; i++)
+			word2 += std::to_string( s->processJob[i]) + " ";
+		word2 += "\r\n";
+		for(int i = 1; i <= s->numNodes; i++)
+			word2 += std::to_string(s->jobDone[i]) + " ";
+		word2 += "\r\n";
+		for(int i = 1; i <= s->numNodes; i++)
+			word2 += std::to_string(s->jobMarked[i]) + " ";
+		word2 += "\r\n\r\n";
+	
+		print_append(word2, argv[4]);	
+	}
+
+	print_append(s->printTable(currentTime), argv[3]);
 
 	return 0;
 }
