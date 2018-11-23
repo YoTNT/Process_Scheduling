@@ -137,7 +137,6 @@ class Scheduling
 		void computeTotalJobTimes(string);	// Finding total job time of all job
 											// and update job time array
 		int getUnMarkOrphen();				// Find the next orphen, just 1 orphen
-		void printList();					// Printing the OPEN on console
 		string printTable(int);				// Printing the schedule table to file
 		int findProcessor();				// Finding the next available processor, return -1 if there's no one
 		void updateTable(int, int, int);	// Updating talbe with parameters (Proc id, job id, time slice)
@@ -464,7 +463,8 @@ int main(int argc, char ** argv)
 		s->OPEN->printList();
 
 		qNode* pop_Open_qNode = new qNode();
-		pop_Open_qNode = s->OPEN->removal();
+		if(procUsed < s->procGiven)
+			pop_Open_qNode = s->OPEN->removal();
 
 		while(pop_Open_qNode != NULL and procUsed < s->procGiven)
 		{
@@ -525,8 +525,6 @@ int main(int argc, char ** argv)
 		for(int i = 1; i <= s->numNodes; i++)
 			word2 += std::to_string(s->jobDone[i]) + " ";
 		word2 += "\r\n";
-		for(int i = 1; i <= s->numNodes; i++)
-			word2 += std::to_string(s->jobMarked[i]) + " ";
 		word2 += "\r\n\r\n";
 	
 		print_append(word2, argv[4]);	
